@@ -1,18 +1,28 @@
 """
-DeepMDC ORF Dataset Generator.
+DeepMDC ORF & Non-ORF Dataset Generator.
 
 Processes Bakta JSON annotation files (.json or .json.xz) into the exact format
 expected by DeepMDC (deepmdc/src/utils):
-1. database/complete_tables/<ID>.tsv:
-   Intermediate complete table containing [locus, type, product, sequence, count].
-2. database/orfs/<ID>.tsv:
-   Final DeepRC input table containing [orf, templates].
-3. database/all_ORFs.json.xz:
-   Deduplicated global biological dictionary mapping every amino acid sequence
-   to its gene symbol, product annotation, and database cross-reference IDs.
-4. database/metadata.tsv:
-   Metadata table linking sample filenames to their antibiotic phenotype label
-   (e.g., ID: 562.100134.tsv, CIP: R/S, Real_CIP: R/S).
+1. ORFs (Coding sequences - CDS):
+   - database/complete_tables/<ID>.tsv:
+     Intermediate complete table containing [locus, type, product, sequence, count].
+   - database/orfs/<ID>.tsv:
+     Final DeepRC input table containing [orf, templates].
+   - database/all_ORFs.json.xz:
+     Deduplicated global biological dictionary mapping every amino acid sequence
+     to its gene symbol, product annotation, and database cross-reference IDs.
+2. Non-ORFs (Non-coding RNAs, tRNAs, rRNAs, CRISPRs, regulatory elements):
+   - database/complete_tables_non_orfs/<ID>.tsv:
+     Intermediate complete table containing [locus, type, product, sequence, count].
+   - database/non_orfs/<ID>.tsv:
+     Final DeepRC input table containing [orf, templates].
+   - database/all_non_orfs.json.xz:
+     Deduplicated global biological dictionary mapping every nucleotide sequence
+     to its feature type, gene symbol, product annotation, and database cross-reference IDs.
+3. Metadata:
+   - database/metadata.tsv:
+     Metadata table linking sample filenames to their antibiotic phenotype label
+     (e.g., ID: 562.100134.tsv, CIP: R/S, Real_CIP: R/S).
 """
 
 import argparse
@@ -48,17 +58,21 @@ except ImportError:
 
 @dataclass
 class OrfExtractionResult:
-    """Stores metrics for a single sample's extracted ORFs."""
+    """Stores metrics for a single sample's extracted ORFs and non-ORFs."""
     sample_id: str
     total_orfs: int
     unique_orfs: int
     complete_table_path: Path
     orf_table_path: Path
+    total_non_orfs: int = 0
+    unique_non_orfs: int = 0
+    complete_table_non_orf_path: Optional[Path] = None
+    non_orf_table_path: Optional[Path] = None
 
 
 class OrfDatasetBuilder:
     """
-    Builds the DeepMDC ORF dataset and the consolidated all_ORFs dictionary.
+    Builds the DeepMDC ORF and non-ORF datasets and the consolidated biological dictionaries.
     """
 
     def __init__(
@@ -68,7 +82,12 @@ class OrfDatasetBuilder:
         complete_tables_dir: Union[str, Path] = "database/complete_tables",
         orfs_dir: Union[str, Path] = "database/orfs",
         all_orfs_output: Union[str, Path] = "database/all_ORFs.json.xz",
+        complete_tables_non_orfs_dir: Union[str, Path] = "database/complete_tables_non_orfs",
+        non_orfs_dir: Union[str, Path] = "database/non_orfs",
+        all_non_orfs_output: Union[str, Path] = "database/all_non_orfs.json.xz",
         metadata_output: Union[str, Path] = "database/metadata.tsv",
+        metadata_non_orfs_output: Optional[Union[str, Path]] = "database/metadata_non_orfs.tsv",
+        extract_non_orfs: bool = True,
         antibiotic_name: str = "CIP",
         filter_orfs: bool = False,
         use_sra_id: bool = False,
@@ -80,7 +99,12 @@ class OrfDatasetBuilder:
         self.complete_tables_dir = Path(complete_tables_dir)
         self.orfs_dir = Path(orfs_dir)
         self.all_orfs_output = Path(all_orfs_output)
+        self.complete_tables_non_orfs_dir = Path(complete_tables_non_orfs_dir)
+        self.non_orfs_dir = Path(non_orfs_dir)
+        self.all_non_orfs_output = Path(all_non_orfs_output)
         self.metadata_output = Path(metadata_output)
+        self.metadata_non_orfs_output = Path(metadata_non_orfs_output) if metadata_non_orfs_output else None
+        self.extract_non_orfs = extract_non_orfs
         self.antibiotic_name = antibiotic_name.upper()
         self.filter_orfs = filter_orfs
         self.use_sra_id = use_sra_id
@@ -92,6 +116,13 @@ class OrfDatasetBuilder:
         self.orfs_dir.mkdir(parents=True, exist_ok=True)
         self.all_orfs_output.parent.mkdir(parents=True, exist_ok=True)
         self.metadata_output.parent.mkdir(parents=True, exist_ok=True)
+
+        if self.extract_non_orfs:
+            self.complete_tables_non_orfs_dir.mkdir(parents=True, exist_ok=True)
+            self.non_orfs_dir.mkdir(parents=True, exist_ok=True)
+            self.all_non_orfs_output.parent.mkdir(parents=True, exist_ok=True)
+            if self.metadata_non_orfs_output:
+                self.metadata_non_orfs_output.parent.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def read_compressed_json(json_path: Union[str, Path]) -> dict:
@@ -129,71 +160,107 @@ class OrfDatasetBuilder:
     def process_single_json(
         self,
         json_file: Path,
-    ) -> Tuple[List[List[Union[str, int]]], Dict[str, dict]]:
+    ) -> Tuple[
+        List[List[Union[str, int]]],
+        Dict[str, dict],
+        List[List[Union[str, int]]],
+        Dict[str, dict],
+    ]:
         """
-        Extracts CDS amino acid sequences from a Bakta JSON file.
+        Extracts both CDS amino acid sequences (ORFs) and non-CDS features (non-ORFs)
+        from a Bakta JSON file.
 
         Returns:
             Tuple of:
-            - rows: List of [locus, type, product, sequence, count]
+            - orf_rows: List of [locus, type, product, sequence, count]
             - orfs_meta: Dict mapping aa_sequence -> {"gene": str|None, "product": str, "ids": str}
+            - non_orf_rows: List of [locus, type, product, sequence, count]
+            - non_orfs_meta: Dict mapping nt_sequence -> {"type": str, "gene": str|None, "product": str, "ids": str}
         """
         data = self.read_compressed_json(json_file)
         features = data.get("features", [])
 
-        sequences: List[str] = []
-        raw_rows: List[List[str]] = []
+        # ORF containers
+        orf_sequences: List[str] = []
+        raw_orf_rows: List[List[str]] = []
         orfs_meta: Dict[str, dict] = {}
 
+        # Non-ORF containers
+        non_orf_sequences: List[str] = []
+        raw_non_orf_rows: List[List[str]] = []
+        non_orfs_meta: Dict[str, dict] = {}
+
         for feat in features:
-            feat_type = str(feat.get("type", "")).lower()
-            if feat_type != "cds":
-                continue
-
-            sequence = str(feat.get("aa", "")).strip().upper()
-            if not sequence:
-                continue
-
+            raw_type = str(feat.get("type", "")).strip()
+            feat_type = raw_type.lower()
             product = str(feat.get("product", "")).strip()
             locus = str(feat.get("locus", feat.get("id", ""))).strip()
             gene = feat.get("gene") or None
             if gene:
                 gene = str(gene).strip()
 
-            if self.filter_orfs:
-                if product.lower() == "hypothetical protein":
+            db_xrefs = feat.get("db_xrefs", [])
+            if isinstance(db_xrefs, list):
+                ids_str = ", ".join(str(x) for x in db_xrefs)
+            else:
+                ids_str = str(db_xrefs or "")
+
+            # 1. ORF processing (CDS)
+            if feat_type == "cds":
+                sequence = str(feat.get("aa", "")).strip().upper()
+                if not sequence:
                     continue
-                if not (self.min_aa_len <= len(sequence) <= self.max_aa_len):
+
+                if self.filter_orfs:
+                    if product.lower() == "hypothetical protein":
+                        continue
+                    if not (self.min_aa_len <= len(sequence) <= self.max_aa_len):
+                        continue
+
+                orf_sequences.append(sequence)
+                raw_orf_rows.append([locus, "cds", product, sequence])
+
+                if sequence not in orfs_meta:
+                    orfs_meta[sequence] = {
+                        "gene": gene,
+                        "product": product,
+                        "ids": ids_str,
+                    }
+
+            # 2. Non-ORF processing (all features that are not CDS, e.g. ncRNA, tRNA, rRNA, etc.)
+            else:
+                nt_sequence = str(feat.get("nt", "")).strip().upper()
+                if not nt_sequence:
                     continue
 
-            sequences.append(sequence)
-            raw_rows.append([locus, "cds", product, sequence])
+                non_orf_sequences.append(nt_sequence)
+                raw_non_orf_rows.append([locus, raw_type, product, nt_sequence])
 
-            # Deduplicate biological annotation into dictionary
-            if sequence not in orfs_meta:
-                db_xrefs = feat.get("db_xrefs", [])
-                if isinstance(db_xrefs, list):
-                    ids_str = ", ".join(str(x) for x in db_xrefs)
-                else:
-                    ids_str = str(db_xrefs or "")
+                if nt_sequence not in non_orfs_meta:
+                    non_orfs_meta[nt_sequence] = {
+                        "type": raw_type,
+                        "gene": gene,
+                        "product": product,
+                        "ids": ids_str,
+                    }
 
-                orfs_meta[sequence] = {
-                    "gene": gene,
-                    "product": product,
-                    "ids": ids_str,
-                }
+        # Count frequencies per sample for ORFs
+        final_orf_rows = []
+        if raw_orf_rows:
+            orf_counter = Counter(orf_sequences)
+            for r in raw_orf_rows:
+                seq = r[3]
+                final_orf_rows.append([r[0], r[1], r[2], seq, orf_counter[seq]])
 
-        if not raw_rows:
-            return [], {}
+        # Count frequencies per sample for Non-ORFs
+        final_non_orf_rows = []
+        if raw_non_orf_rows:
+            non_orf_counter = Counter(non_orf_sequences)
+            for r in raw_non_orf_rows:
+                seq = r[3]
+                final_non_orf_rows.append([r[0], r[1], r[2], seq, non_orf_counter[seq]])
 
-        # Count frequencies per sample
-        seq_counter = Counter(sequences)
-        final_rows = []
-        for r in raw_rows:
-            seq = r[3]
-            final_rows.append([r[0], r[1], r[2], seq, seq_counter[seq]])
-
-        return final_rows, orfs_meta
+        return final_orf_rows, orfs_meta, final_non_orf_rows, non_orfs_meta
 
     @staticmethod
     def load_cohort_metadata(file_path: Union[str, Path]) -> List[Dict[str, any]]:
@@ -247,14 +314,16 @@ class OrfDatasetBuilder:
         - Reads metadata cohort.
         - Processes all Bakta JSON files.
         - Generates complete_tables and orfs TSVs.
-        - Consolidates all_ORFs.json.xz.
-        - Exports metadata.tsv.
+        - Generates complete_tables_non_orfs and non_orfs TSVs (if extract_non_orfs=True).
+        - Consolidates all_ORFs.json.xz and all_non_orfs.json.xz.
+        - Exports metadata.tsv and metadata_non_orfs.tsv.
         """
         logging.info(f"Loading metadata from: {self.metadata_file}")
         records = self.load_cohort_metadata(self.metadata_file)
         logging.info(f"Loaded {len(records)} samples from metadata.")
 
         all_orfs_catalog: Dict[str, dict] = {}
+        all_non_orfs_catalog: Dict[str, dict] = {}
         processed_metadata_rows: List[Dict[str, str]] = []
         success_count = 0
         missing_count = 0
@@ -270,16 +339,22 @@ class OrfDatasetBuilder:
                 missing_count += 1
                 continue
 
-            rows, orfs_meta = self.process_single_json(json_path)
-            if not rows:
-                logging.warning(f"[{gid}] No valid CDS features extracted from {json_path.name}.")
+            orf_rows, orfs_meta, non_orf_rows, non_orfs_meta = self.process_single_json(json_path)
+            if not orf_rows and not non_orf_rows:
+                logging.warning(f"[{gid}] No valid features extracted from {json_path.name}.")
                 missing_count += 1
                 continue
 
-            # Merge into global catalog
+            # Merge ORFs into global catalog
             for seq, meta in orfs_meta.items():
                 if seq not in all_orfs_catalog:
                     all_orfs_catalog[seq] = meta
+
+            # Merge Non-ORFs into global catalog
+            if self.extract_non_orfs:
+                for seq, meta in non_orfs_meta.items():
+                    if seq not in all_non_orfs_catalog:
+                        all_non_orfs_catalog[seq] = meta
 
             # Choose identifier for output filenames
             if self.use_sra_id and sra_ids:
@@ -289,20 +364,35 @@ class OrfDatasetBuilder:
 
             table_filename = f"{sample_stem}.tsv"
 
-            # 1. Write intermediate complete table [locus, type, product, sequence, count]
-            complete_table_path = self.complete_tables_dir / table_filename
-            with open(complete_table_path, "w", encoding="utf-8", newline="") as f:
-                writer = csv.writer(f, delimiter="\t")
-                writer.writerow(["locus", "type", "product", "sequence", "count"])
-                writer.writerows(rows)
+            # 1. Write ORF tables
+            if orf_rows:
+                complete_table_path = self.complete_tables_dir / table_filename
+                with open(complete_table_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.writer(f, delimiter="\t")
+                    writer.writerow(["locus", "type", "product", "sequence", "count"])
+                    writer.writerows(orf_rows)
 
-            # 2. Write DeepRC input table [orf, templates]
-            orf_table_path = self.orfs_dir / table_filename
-            with open(orf_table_path, "w", encoding="utf-8", newline="") as f:
-                writer = csv.writer(f, delimiter="\t")
-                writer.writerow(["orf", "templates"])
-                for r in rows:
-                    writer.writerow([r[3], r[4]])
+                orf_table_path = self.orfs_dir / table_filename
+                with open(orf_table_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.writer(f, delimiter="\t")
+                    writer.writerow(["orf", "templates"])
+                    for r in orf_rows:
+                        writer.writerow([r[3], r[4]])
+
+            # 2. Write Non-ORF tables
+            if self.extract_non_orfs and non_orf_rows:
+                complete_table_non_orf_path = self.complete_tables_non_orfs_dir / table_filename
+                with open(complete_table_non_orf_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.writer(f, delimiter="\t")
+                    writer.writerow(["locus", "type", "product", "sequence", "count"])
+                    writer.writerows(non_orf_rows)
+
+                non_orf_table_path = self.non_orfs_dir / table_filename
+                with open(non_orf_table_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.writer(f, delimiter="\t")
+                    writer.writerow(["orf", "templates"])
+                    for r in non_orf_rows:
+                        writer.writerow([r[3], r[4]])
 
             # 3. Add to metadata rows
             # Format label as 'R' or 'S'
@@ -329,6 +419,15 @@ class OrfDatasetBuilder:
             writer.writerows(processed_metadata_rows)
         logging.info(f"Saved DeepMDC metadata to: {self.metadata_output} ({len(processed_metadata_rows)} samples)")
 
+        # Write metadata_non_orfs.tsv if configured
+        if self.extract_non_orfs and self.metadata_non_orfs_output:
+            with open(self.metadata_non_orfs_output, "w", encoding="utf-8", newline="") as f:
+                fieldnames = ["ID", self.antibiotic_name, f"Real_{self.antibiotic_name}"]
+                writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter="\t")
+                writer.writeheader()
+                writer.writerows(processed_metadata_rows)
+            logging.info(f"Saved non-ORF metadata to: {self.metadata_non_orfs_output}")
+
         # 5. Write database/all_ORFs.json.xz
         logging.info(f"Exporting {len(all_orfs_catalog)} unique ORFs to: {self.all_orfs_output}...")
         if str(self.all_orfs_output).endswith(".xz"):
@@ -337,14 +436,25 @@ class OrfDatasetBuilder:
         else:
             with open(self.all_orfs_output, "w", encoding="utf-8") as out:
                 json.dump(all_orfs_catalog, out, indent=2)
-
         logging.info(f"Successfully generated all_ORFs catalog with {len(all_orfs_catalog)} unique sequences.")
+
+        # 6. Write database/all_non_orfs.json.xz (if extract_non_orfs=True)
+        if self.extract_non_orfs:
+            logging.info(f"Exporting {len(all_non_orfs_catalog)} unique non-ORFs to: {self.all_non_orfs_output}...")
+            if str(self.all_non_orfs_output).endswith(".xz"):
+                with lzma.open(self.all_non_orfs_output, "wt", encoding="utf-8") as out:
+                    json.dump(all_non_orfs_catalog, out)
+            else:
+                with open(self.all_non_orfs_output, "w", encoding="utf-8") as out:
+                    json.dump(all_non_orfs_catalog, out, indent=2)
+            logging.info(f"Successfully generated all_non_orfs catalog with {len(all_non_orfs_catalog)} unique sequences.")
+
         return success_count, missing_count
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="DeepMDC ORF Dataset Builder: processes Bakta annotations into orfs/*.tsv and all_ORFs.json.xz.",
+        description="DeepMDC ORF & Non-ORF Dataset Builder: processes Bakta annotations into orfs/*.tsv, non_orfs/*.tsv, all_ORFs.json.xz, and all_non_orfs.json.xz.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -363,7 +473,7 @@ def main():
         "--complete-tables-dir",
         type=str,
         default="database/complete_tables",
-        help="Directory to save intermediate detailed complete tables.",
+        help="Directory to save intermediate detailed complete ORF tables.",
     )
     parser.add_argument(
         "--orfs-dir", "-o",
@@ -375,13 +485,42 @@ def main():
         "--all-orfs-output", "-a",
         type=str,
         default="database/all_ORFs.json.xz",
-        help="Path to save the deduplicated global biological dictionary (.json or .json.xz).",
+        help="Path to save the deduplicated global ORF dictionary (.json or .json.xz).",
+    )
+    parser.add_argument(
+        "--complete-tables-non-orfs-dir",
+        type=str,
+        default="database/complete_tables_non_orfs",
+        help="Directory to save intermediate detailed complete non-ORF tables.",
+    )
+    parser.add_argument(
+        "--non-orfs-dir",
+        type=str,
+        default="database/non_orfs",
+        help="Directory to save final DeepRC non-ORF input tables (columns: orf, templates).",
+    )
+    parser.add_argument(
+        "--all-non-orfs-output",
+        type=str,
+        default="database/all_non_orfs.json.xz",
+        help="Path to save the deduplicated global non-ORF dictionary (.json or .json.xz).",
+    )
+    parser.add_argument(
+        "--skip-non-orfs",
+        action="store_true",
+        help="Skip extraction and compilation of non-ORF genomic features.",
     )
     parser.add_argument(
         "--metadata-output",
         type=str,
         default="database/metadata.tsv",
         help="Path to save the final DeepMDC metadata.tsv.",
+    )
+    parser.add_argument(
+        "--metadata-non-orfs-output",
+        type=str,
+        default="database/metadata_non_orfs.tsv",
+        help="Path to save the non-ORF metadata.tsv.",
     )
     parser.add_argument(
         "--antibiotic",
@@ -409,7 +548,12 @@ def main():
         complete_tables_dir=args.complete_tables_dir,
         orfs_dir=args.orfs_dir,
         all_orfs_output=args.all_orfs_output,
+        complete_tables_non_orfs_dir=args.complete_tables_non_orfs_dir,
+        non_orfs_dir=args.non_orfs_dir,
+        all_non_orfs_output=args.all_non_orfs_output,
         metadata_output=args.metadata_output,
+        metadata_non_orfs_output=args.metadata_non_orfs_output,
+        extract_non_orfs=not args.skip_non_orfs,
         antibiotic_name=args.antibiotic,
         filter_orfs=args.filter_orfs,
         use_sra_id=args.use_sra_id,
@@ -418,14 +562,18 @@ def main():
     success, missing = builder.build_dataset()
 
     print("\n" + "=" * 60)
-    print("DEEPMDC ORF DATASET GENERATION SUMMARY")
+    print("DEEPMDC ORF & NON-ORF DATASET GENERATION SUMMARY")
     print("=" * 60)
     print(f"Successfully processed samples: {success}")
     print(f"Missing / skipped samples: {missing}")
     print(f"ORF tables saved to: {args.orfs_dir}/")
-    print(f"Complete tables saved to: {args.complete_tables_dir}/")
+    print(f"ORF complete tables saved to: {args.complete_tables_dir}/")
+    print(f"Global ORF catalog: {args.all_orfs_output}")
+    if not args.skip_non_orfs:
+        print(f"Non-ORF tables saved to: {args.non_orfs_dir}/")
+        print(f"Non-ORF complete tables saved to: {args.complete_tables_non_orfs_dir}/")
+        print(f"Global non-ORF catalog: {args.all_non_orfs_output}")
     print(f"DeepMDC metadata saved to: {args.metadata_output}")
-    print(f"Global biological catalog: {args.all_orfs_output}")
     print("=" * 60 + "\n")
 
 

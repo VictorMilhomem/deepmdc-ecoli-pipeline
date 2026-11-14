@@ -152,12 +152,23 @@ python src/deepmdc_rawdata/run_bakta.py \
 
 ## 3. DeepMDC Dataset Generation (`build_orf_dataset.py`)
 
-Generates the exact dataset structure expected by the original DeepMDC pipeline ([`create_orf_table.py`](https://github.com/CABGenOrg/deepmdc/blob/main/src/utils/create_orf_table.py)):
+Processes Bakta JSON annotation files into the exact dataset structures expected by the original DeepMDC pipeline ([`create_orf_table.py`](https://github.com/CABGenOrg/deepmdc/blob/main/src/utils/create_orf_table.py)). It automatically extracts and separates **ORFs** (protein-coding CDS) and **Non-ORFs** (tRNAs, rRNAs, ncRNAs, sRNAs, CRISPRs, regulatory elements) into dedicated directories:
 
-- `database/complete_tables/<ID>.tsv`: Intermediate table with columns `[locus, type, product, sequence, count]`.
-- `database/orfs/<ID>.tsv`: Final DeepRC input table with columns `[orf, templates]`.
-- `database/all_ORFs.json.xz`: Deduplicated global dictionary mapping each amino acid sequence to its gene, product, and cross-reference IDs for model attention analysis ([`prediction_and_att_weights.py`](https://github.com/CABGenOrg/deepmdc/blob/main/prediction_and_att_weights.py)).
-- `database/metadata.tsv`: DeepMDC-formatted metadata with columns `[ID, CIP, Real_CIP]` (`R`/`S` labels).
+### Generated Files and Structure
+
+1. **ORFs (Coding Sequences - Amino Acids)**:
+   - `database/complete_tables/<ID>.tsv`: Intermediate table with columns `[locus, type, product, sequence, count]`.
+   - `database/orfs/<ID>.tsv`: Final DeepRC input table with columns `[orf, templates]`.
+   - `database/all_ORFs.json.xz`: Deduplicated global dictionary mapping each amino acid sequence to `{"gene": ..., "product": ..., "ids": ...}` for attention analysis ([`prediction_and_att_weights.py`](https://github.com/CABGenOrg/deepmdc/blob/main/prediction_and_att_weights.py)).
+
+2. **Non-ORFs (Non-Coding Elements - Nucleotides)**:
+   - `database/complete_tables_non_orfs/<ID>.tsv`: Intermediate table with columns `[locus, type, product, sequence, count]`.
+   - `database/non_orfs/<ID>.tsv`: Final DeepRC input table with columns `[orf, templates]`.
+   - `database/all_non_orfs.json.xz`: Deduplicated global dictionary mapping each nucleotide sequence to `{"type": ..., "gene": ..., "product": ..., "ids": ...}`.
+
+3. **Metadata**:
+   - `database/metadata.tsv`: DeepMDC-formatted metadata with columns `[ID, CIP, Real_CIP]` (`R`/`S` labels).
+   - `database/metadata_non_orfs.tsv`: Dedicated non-ORF metadata matching `database/non_orfs/<ID>.tsv`.
 
 ### Run Dataset Generation
 
@@ -170,46 +181,17 @@ python src/deepmdc_rawdata/build_orf_dataset.py
 - `--metadata <path>`: Path to input cohort metadata (default: `database/runs_metadata.tsv`).
 - `--jsons-dir <path>`: Directory containing Bakta JSON files (default: `jsons`).
 - `--orfs-dir <path>`: Directory to save final DeepRC ORF input tables (default: `database/orfs`).
-- `--complete-tables-dir <path>`: Directory to save intermediate complete tables (default: `database/complete_tables`).
-- `--all-orfs-output <path>`: Path to save the deduplicated biological dictionary (default: `database/all_ORFs.json.xz`).
+- `--complete-tables-dir <path>`: Directory to save intermediate complete ORF tables (default: `database/complete_tables`).
+- `--all-orfs-output <path>`: Path to save the deduplicated ORF biological dictionary (default: `database/all_ORFs.json.xz`).
+- `--non-orfs-dir <path>`: Directory to save final DeepRC non-ORF input tables (default: `database/non_orfs`).
+- `--complete-tables-non-orfs-dir <path>`: Directory to save intermediate complete non-ORF tables (default: `database/complete_tables_non_orfs`).
+- `--all-non-orfs-output <path>`: Path to save the deduplicated non-ORF dictionary (default: `database/all_non_orfs.json.xz`).
+- `--skip-non-orfs`: Skip non-ORF extraction and generate only ORF datasets.
 - `--metadata-output <path>`: Path to save the final DeepMDC `metadata.tsv` (default: `database/metadata.tsv`).
+- `--metadata-non-orfs-output <path>`: Path to save the non-ORF `metadata_non_orfs.tsv` (default: `database/metadata_non_orfs.tsv`).
 - `--antibiotic <name>`: Antibiotic column name (default: `CIP`).
-- `--filter-orfs`: Filter out hypothetical proteins and keep only sequences between 40 and 2,000 aa.
+- `--filter-orfs`: Filter out hypothetical proteins and keep only ORF sequences between 40 and 2,000 aa.
 - `--use-sra-id`: Use SRA run accessions (e.g. `ERR4035678.tsv`) instead of BV-BRC Genome IDs (`562.100134.tsv`) as filenames.
-
----
-
-## 4. Alternative: Raw FASTQ Download (Unassembled Reads)
-
-If you need the raw unassembled sequencing reads from SRA/ENA:
-
-### Download Pilot Cohort (100 isolates / 101 SRA runs)
-
-```bash
-python src/deepmdc_rawdata/get_data.py
-```
-
-### Test Mode (1 MB chunk per file)
-
-```bash
-python src/deepmdc_rawdata/get_data.py --test
-```
-
-### Download All Candidate Isolates (5,948 isolates / 5,964 SRA runs)
-
-```bash
-python src/deepmdc_rawdata/get_data.py --all
-```
-
-### Additional Options for `get_data.py`
-
-- `--file <path>`: Path to a specific metadata CSV or TSV file.
-- `--workers <n>`: Number of concurrent download threads (default: `4`).
-- `--output-dir <path>`: Directory to save FASTQ files (default: `database/raw_data`).
-- `--timeout <seconds>`: Chunk read timeout in seconds (default: `120s`).
-- `--retries <n>`: Maximum retry attempts on timeout or connection failure with HTTP Range resume (default: `5`).
-- `--limit <n>`: Limit download to the first N runs.
-- `--export-manifest <path>`: Path to export the expanded run-level TSV manifest (default: `database/runs_metadata.tsv`).
 
 ---
 
