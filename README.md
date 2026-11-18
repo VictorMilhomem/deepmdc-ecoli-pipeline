@@ -90,6 +90,50 @@ python src/deepmdc_rawdata/get_fasta.py --retry-missing
 
 ---
 
+## 1b. Raw FASTQ Download (`get_fastq.py`)
+
+If you need raw sequencing reads (`.fastq.gz`) from the European Nucleotide Archive (ENA) instead of pre-assembled FASTA contigs, use `src/deepmdc_rawdata/get_fastq.py`. It supports resumable downloads via HTTP `Range` headers, automatic HTTPS/HTTP fallback, and GZIP/FASTQ header integrity verification.
+
+### Download Pilot Cohort FASTQs (100 isolates / 101 SRA runs)
+
+```bash
+python src/deepmdc_rawdata/get_fastq.py
+```
+
+### Download All Candidate FASTQs (5,948 isolates / 5,964 SRA runs)
+
+```bash
+python src/deepmdc_rawdata/get_fastq.py --all
+```
+
+### Integrity Verification and Automated Retry
+
+Verify downloaded FASTQ files against the cohort metadata:
+
+```bash
+python src/deepmdc_rawdata/get_fastq.py --verify
+```
+
+Automatically re-download only missing or corrupted SRA runs:
+
+```bash
+python src/deepmdc_rawdata/get_fastq.py --retry-missing
+```
+
+### Additional Options for `get_fastq.py`
+
+- `--output-dir <path>`: Directory to save downloaded FASTQ files (default: `database/raw_data`).
+- `--workers <n>`: Number of concurrent download threads (default: `4`).
+- `--limit <n>`: Limit download to the first `N` SRA runs.
+- `--test`: Test mode — downloads only the first 1 MB of each FASTQ file (`partial_*.fastq.gz`).
+- `--report <path>`: Path to export FASTQ verification report (default: `database/fastq_verification_report.tsv`).
+- `--manifest <path>`: Path to export FASTQ status manifest (default: `database/fastq_manifest.tsv`).
+- `--export-manifest <path>`: Path to export expanded run-level metadata TSV (default: `database/runs_metadata.tsv`).
+- `--file <path>`: Path to a custom metadata CSV or TSV file.
+- `--force`: Force re-download of existing files.
+
+---
+
 ## 2. Genomic Annotation with Bakta
 
 Automates batch annotation of assembled FASTA genomes using Bakta, producing consolidated JSON annotations (`.json.xz`) ready for downstream feature extraction.
