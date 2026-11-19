@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 
 def get_project_root() -> Path:
-    """Returns the repository root directory (two levels up from src/deepmdc_rawdata)."""
+    """Returns the repository root directory (two levels up from src/deepmdc_ecoli_pipeline)."""
     return Path(__file__).resolve().parent.parent.parent
 
 

@@ -1,5 +1,5 @@
 [project]
-name = "deepmdc-rawdata"
+name = "deepmdc-ecoli-pipeline"
 version = "0.1.0"
 description = ""
 authors = [
@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "deepmdc_rawdata", from = "src"}]
+packages = [{include = "deepmdc_ecoli_pipeline", from = "src"}]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -1,4 +1,4 @@
-# DeepMDC-RawData
+# deepmdc-ecoli-pipeline
 
 This repository provides an automated data retrieval, genome assembly download, Bakta annotation, and feature extraction pipeline for the [DeepMDC](https://github.com/CABGenOrg/deepmdc) project, specifically curated for *Escherichia coli* and Ciprofloxacin antimicrobial resistance (AMR) classification.
 
@@ -19,8 +19,8 @@ This repository provides an automated data retrieval, genome assembly download, 
 Create and activate a new Conda environment:
 
 ```bash
-conda create -n deepmdc-rawdata python=3.11
-conda activate deepmdc-rawdata
+conda create -n deepmdc-ecoli-pipeline python=3.11
+conda activate deepmdc-ecoli-pipeline
 pip install -r requirements.txt
 ```
 
@@ -56,13 +56,13 @@ Directly retrieves complete assembled bacterial genomes (`.fna`) from BV-BRC and
 ### Download Pilot Cohort (100 isolates: 50 Resistant / 50 Susceptible)
 
 ```bash
-python src/deepmdc_rawdata/get_fasta.py
+python src/deepmdc_ecoli_pipeline/get_fasta.py
 ```
 
 ### Download All Candidate Isolates (5,948 isolates)
 
 ```bash
-python src/deepmdc_rawdata/get_fasta.py --all
+python src/deepmdc_ecoli_pipeline/get_fasta.py --all
 ```
 
 ### Integrity Verification and Automated Retry
@@ -70,13 +70,13 @@ python src/deepmdc_rawdata/get_fasta.py --all
 Verify whether all genomes are downloaded and represent valid FASTA files:
 
 ```bash
-python src/deepmdc_rawdata/get_fasta.py --verify
+python src/deepmdc_ecoli_pipeline/get_fasta.py --verify
 ```
 
 Automatically download only missing or corrupted files:
 
 ```bash
-python src/deepmdc_rawdata/get_fasta.py --retry-missing
+python src/deepmdc_ecoli_pipeline/get_fasta.py --retry-missing
 ```
 
 ### Additional Options for `get_fasta.py`
@@ -92,18 +92,18 @@ python src/deepmdc_rawdata/get_fasta.py --retry-missing
 
 ## 1b. Raw FASTQ Download (`get_fastq.py`)
 
-If you need raw sequencing reads (`.fastq.gz`) from the European Nucleotide Archive (ENA) instead of pre-assembled FASTA contigs, use `src/deepmdc_rawdata/get_fastq.py`. It supports resumable downloads via HTTP `Range` headers, automatic HTTPS/HTTP fallback, and GZIP/FASTQ header integrity verification.
+If you need raw sequencing reads (`.fastq.gz`) from the European Nucleotide Archive (ENA) instead of pre-assembled FASTA contigs, use `src/deepmdc_ecoli_pipeline/get_fastq.py`. It supports resumable downloads via HTTP `Range` headers, automatic HTTPS/HTTP fallback, and GZIP/FASTQ header integrity verification.
 
 ### Download Pilot Cohort FASTQs (100 isolates / 101 SRA runs)
 
 ```bash
-python src/deepmdc_rawdata/get_fastq.py
+python src/deepmdc_ecoli_pipeline/get_fastq.py
 ```
 
 ### Download All Candidate FASTQs (5,948 isolates / 5,964 SRA runs)
 
 ```bash
-python src/deepmdc_rawdata/get_fastq.py --all
+python src/deepmdc_ecoli_pipeline/get_fastq.py --all
 ```
 
 ### Integrity Verification and Automated Retry
@@ -111,13 +111,13 @@ python src/deepmdc_rawdata/get_fastq.py --all
 Verify downloaded FASTQ files against the cohort metadata:
 
 ```bash
-python src/deepmdc_rawdata/get_fastq.py --verify
+python src/deepmdc_ecoli_pipeline/get_fastq.py --verify
 ```
 
 Automatically re-download only missing or corrupted SRA runs:
 
 ```bash
-python src/deepmdc_rawdata/get_fastq.py --retry-missing
+python src/deepmdc_ecoli_pipeline/get_fastq.py --retry-missing
 ```
 
 ### Additional Options for `get_fastq.py`
@@ -161,7 +161,7 @@ bakta_db download --type light --output /path/to/bakta_db
 ### Run Cohort Annotation
 
 ```bash
-python src/deepmdc_rawdata/run_bakta.py \
+python src/deepmdc_ecoli_pipeline/run_bakta.py \
   --fasta-dir "database/fasta_data" \
   --db "/path/to/bakta_db" \
   --threads 8
@@ -172,13 +172,13 @@ python src/deepmdc_rawdata/run_bakta.py \
 Verify the status and completeness of generated annotations without re-running Bakta:
 
 ```bash
-python src/deepmdc_rawdata/run_bakta.py --verify --jsons-dir jsons
+python src/deepmdc_ecoli_pipeline/run_bakta.py --verify --jsons-dir jsons
 ```
 
 Simulate the annotation execution (Dry-Run):
 
 ```bash
-python src/deepmdc_rawdata/run_bakta.py \
+python src/deepmdc_ecoli_pipeline/run_bakta.py \
   --fasta-dir "database/fasta_data" \
   --dry-run
 ```
@@ -217,7 +217,7 @@ Processes Bakta JSON annotation files into the exact dataset structures expected
 ### Run Dataset Generation
 
 ```bash
-python src/deepmdc_rawdata/build_orf_dataset.py
+python src/deepmdc_ecoli_pipeline/build_orf_dataset.py
 ```
 
 ### Additional Options for `build_orf_dataset.py`

@@ -18,8 +18,8 @@ _pkg_root = Path(__file__).resolve().parent.parent
 if str(_pkg_root) not in sys.path:
     sys.path.insert(0, str(_pkg_root))
 
-from deepmdc_rawdata.io_utils import print_summary_banner, read_json_any, resolve_path, write_tsv
-from deepmdc_rawdata.metadata import SraMetadata, resolve_metadata_path
+from deepmdc_ecoli_pipeline.io_utils import print_summary_banner, read_json_any, resolve_path, write_tsv
+from deepmdc_ecoli_pipeline.metadata import SraMetadata, resolve_metadata_path
 
 
 @dataclass
