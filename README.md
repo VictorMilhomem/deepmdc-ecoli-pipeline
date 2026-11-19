@@ -51,7 +51,7 @@ poetry install
 
 ## 1. Assembled Genome Download (Recommended)
 
-Directly retrieves complete assembled bacterial genomes (`.fna`) from BV-BRC and NCBI for the cohort isolates. Downloading assembled contigs reduces data transfer from ~5 TB (raw FASTQs) to ~9 GB and eliminates the need for thousands of CPU hours of *de novo* assembly.
+Directly retrieves complete assembled bacterial genomes (`.fna`) from BV-BRC and NCBI for the cohort isolates.
 
 ### Download Pilot Cohort (100 isolates: 50 Resistant / 50 Susceptible)
 
