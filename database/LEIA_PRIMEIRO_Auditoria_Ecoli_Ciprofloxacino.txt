@@ -1,0 +1,37 @@
+Coorte candidata de Escherichia coli — ciprofloxacino
+
+Estado da análise: triagem inicial validada parcialmente, não dataset final de treinamento. 23/10/2026.
+
+Proveniência
+
+- Arcadia Science (Morin, 2024). Data: https://doi.org/10.5281/zenodo.12692732
+- Código e descrição metodológica: https://github.com/Arcadia-Science/2024-Ecoli-amr-genotype-phenotype_7000strains
+- Fontes BV-BRC usadas na conferência: BVBRC_genome_May31.csv e BVBRC_genome_amr_May31.csv (arquivos no GitHub acima).
+
+
+Conteúdo dos quatro arquivos fornecidos
+
+- ecoli_ciprofloxacin_RS_candidatos_ID.xlsx: 5.948 isolados na aba Amostras e notas.
+- ecoli_ciprofloxacin_RS_candidates_with_metadata.csv: os mesmos 5.948 isolados, CSV delimitado por ponto e vírgula (;).
+- ecoli_ciprofloxacin_RS_pilot_50R_50S.csv: 100 isolados distintos, 50 resistentes e 50 sensíveis, CSV delimitado por ;.
+- summary_counts.csv: contagens resumidas (separador vírgula).
+
+Achados confirmados em auditoria local
+
+- 5.948 isolados candidatos com acesso(s) SRA informado(s), Genome Quality = Good, todos denominados Escherichia coli, sem repetição dos pares Genome Name/SRA.
+- Categorias: 1.291 resistentes e 4.657 sensíveis; o piloto é um subconjunto válido de 100 isolados com 50 R e 50 S.
+- 5.948/5.948 registros têm correspondência exata no BV-BRC original por Genome ID + Genome Name + SRA Accession. Os 15 campos de metadados comparados não apresentaram diferenças significativas (valores numéricos equivalentes, inclusive 100 e 100.0).
+- 5.345/5.948 registros têm fenótipo para ciprofloxacino concordante em BVBRC_genome_amr_May31.csv, comparado por Genome ID + Genome Name. Não se observou oposição R/S nesses registros.
+- 603/5.948 isolados não têm registro de ciprofloxacino na extração AMR May31 utilizada: precisam ser conferidos na matriz publicada pela Arcadia. Seis desses isolados pertencem ao piloto.
+- O arquivo amplo do BV-BRC apresenta 1.370 Genome IDs duplicados entre registros de genomas diferentes; 416 candidatos utilizam IDs ambíguos nesse arquivo. O conjunto candidato foi desambiguado por nome de genoma e acesso SRA. Não usar Genome ID isolado em join, nem convertê-lo para valor numérico no Excel.
+- 180 candidatos têm Assembly Accession informado; os 5.768 restantes exigem localização de assembly alternativo ou download e montagem dos reads.
+- CheckM Completeness preenchido para 1.604; CheckM Contamination para 546. 
+- Três candidatos possuem mais de 500 contigs; 15 possuem N50 menor que 50 kb. Um possui completude CheckM abaixo de 95% (89,6%) e um contaminação acima de 5% (5,8%). Estes números são alertas para revisão, não exclusões automáticas.
+- O conjunto candidato possui 5.964 acessos SRA individuais distribuídos em 5.948 isolados, com seis isolados associados a mais de um run. O piloto tem 101 runs para 100 isolados.
+
+Próximos passos:
+
+3. Baixar os FASTQs do piloto; fazer QC e montagem, produzir FASTA/contigs e verificar métricas de montagem. Os arquivos CSV fornecidos não contêm FASTQs nem assemblies.
+4. Analisar QC.
+5. Tratar Genome ID como string e usar nome de genoma e SRA/BioSample como conferência cruzada. 
+

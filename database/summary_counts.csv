@@ -1,0 +1,22 @@
+﻿category,n
+Isolates in original Arcadia phenotype matrix (as provided),6983
+Ciprofloxacin Susceptible (isolate level),4657
+Ciprofloxacin Resistant (isolate level),1291
+Ciprofloxacin Intermediate (isolate level),91
+Ciprofloxacin missing (isolate level),944
+Ciprofloxacin measured (isolate level),6039
+Candidates R/S (isolate level),5948
+Candidates with SRA string filled,5948
+Candidates with Genome Quality Good,5948
+Candidates with Assembly Accession,180
+Candidates with CheckM Completeness filled,1604
+Candidates with CheckM Contamination filled,546
+Candidates with Contigs <= 500,5945
+Candidates with more than one SRA run,6
+Total SRA run accessions for candidates,5964
+Pilot Resistant isolates,50
+Pilot Susceptible isolates,50
+Pilot isolates,100
+Pilot isolates with more than one SRA run,1
+Total SRA run accessions for pilot,101
+Pilot with Assembly Accession,3
